@@ -221,50 +221,44 @@
   setInterval(loadWeather, 15 * 60000);
 
   /* ---------- Geïnstalleerde apps ---------- */
-  var installed = null;   // null = onbekend (bijv. in een gewone browser)
-  function scanApps(cb) {
-    if (!hasTizen || !tizen.application || !tizen.application.getAppsInfo) return scanViaRest(cb);
-    try {
-      tizen.application.getAppsInfo(function (list) {
-        installed = [];
-        for (var i = 0; i < list.length; i++) {
-          if (list[i].show && list[i].name) installed.push({ id: list[i].id, name: list[i].name });
-        }
-        cb();
-      }, function () { scanViaRest(cb); });
-    } catch (e) { scanViaRest(cb); }
+  // null = onbekend (bijv. in een gewone browser): dan worden alle apps getoond.
+  // De laatst bekende lijst wordt bewaard zodat de rij direct klopt bij opstarten.
+  var installed = null;
+  try { installed = JSON.parse(localStorage.getItem('tvdash.installed') || 'null'); } catch (e) { /* negeren */ }
+
+  function setInstalled(list) {
+    installed = list;
+    try { localStorage.setItem('tvdash.installed', JSON.stringify(list)); } catch (e) { /* negeren */ }
+    buildMain();
+    if (settingsOpen) renderSettings();
   }
 
-  // Terugval: per bekend app-id vragen aan de TV-API of de app bestaat. Alleen
-  // gebruiken als de API echt antwoordt; anders blijven alle apps zichtbaar.
-  function scanViaRest(cb) {
-    if (location.hostname !== '127.0.0.1') return cb();
-    var checks = [], found = [], answered = false, left;
-    for (var k = 0; k < CATALOG.appOrder.length; k++) {
-      var a = CATALOG.apps[CATALOG.appOrder[k]];
-      for (var j = 0; j < a.ids.length; j++) checks.push({ id: a.ids[j], name: a.name });
-    }
-    left = checks.length;
-    if (!left) return cb();
-    var done = function () {
-      if (--left) return;
-      if (answered) installed = found;
-      cb();
-    };
-    for (var i = 0; i < checks.length; i++) {
-      (function (c) {
-        var x = new XMLHttpRequest();
-        x.open('GET', 'http://127.0.0.1:8001/api/v2/applications/' + c.id, true);
-        x.timeout = 4000;
-        x.onload = function () {
-          if (x.status) answered = true;
-          if (x.status === 200) found.push({ id: c.id, name: c.name });
-          done();
+  // TizenBrew heeft geen application.info-recht, dus getAppsInfo faalt daar
+  // meestal; dan vragen we de lijst op via de remote-API van de TV.
+  function scanApps() {
+    var viaRemote = function () {
+      if (location.hostname !== '127.0.0.1') return;   // niet op de TV
+      remote(function (s) {
+        wsListeners['ed.installedApp.get'] = function (m) {
+          var data = (m.data && (m.data.data || m.data)) || [], list = [];
+          for (var i = 0; i < data.length; i++) {
+            if (data[i].appId && data[i].name) list.push({ id: data[i].appId, name: data[i].name, type: data[i].app_type });
+          }
+          if (list.length) setInstalled(list);
         };
-        x.onerror = x.ontimeout = done;
-        x.send();
-      })(checks[i]);
-    }
+        s.send(JSON.stringify({ method: 'ms.channel.emit', params: { event: 'ed.installedApp.get', to: 'host' } }));
+      }, true);
+    };
+    if (!hasTizen || !tizen.application || !tizen.application.getAppsInfo) return viaRemote();
+    try {
+      tizen.application.getAppsInfo(function (list) {
+        var out = [];
+        for (var i = 0; i < list.length; i++) {
+          if (list[i].show && list[i].name) out.push({ id: list[i].id, name: list[i].name });
+        }
+        if (out.length) setInstalled(out); else viaRemote();
+      }, viaRemote);
+    } catch (e) { viaRemote(); }
   }
 
   // Geeft het app-id voor een catalogus-app, of null als hij niet op de TV staat.
@@ -370,10 +364,12 @@
   /* ---------- TV aansturen ----------
      Bronwissel via de Samsung remote-API op de TV zelf (poort 8001/8002). De
      eerste keer vraagt de TV om toestemming; het token wordt daarna bewaard. */
-  var ws = null, wsReady = false, wsQueue = [];
-  function remote(cb) {
+  var ws = null, wsReady = false, wsQueue = [], wsListeners = {}, wsLoud = false;
+  // quiet: geen melding als de verbinding mislukt (voor achtergrondtaken)
+  function remote(cb, quiet) {
     if (ws && wsReady) return cb(ws);
     wsQueue.push(cb);
+    if (!quiet) wsLoud = true;
     if (ws) return;
     var name = btoa('TV Dashboard'), token = null;
     try { token = localStorage.getItem('tvdash.token'); } catch (e) { /* negeren */ }
@@ -384,19 +380,25 @@
     connect(0);
 
     function connect(n) {
-      if (n >= urls.length) { ws = null; wsQueue = []; toast('Geen verbinding met de TV-remote-API'); return; }
+      if (n >= urls.length) {
+        if (wsLoud) toast('Geen verbinding met de TV-remote-API');
+        ws = null; wsQueue = []; wsLoud = false;
+        return;
+      }
       var sock, opened = false;
       try { sock = new WebSocket(urls[n]); } catch (e) { return connect(n + 1); }
       ws = sock;
       sock.onmessage = function (ev) {
         var m; try { m = JSON.parse(ev.data); } catch (e) { return; }
         if (m.event === 'ms.channel.connect') {
-          opened = true; wsReady = true;
+          opened = true; wsReady = true; wsLoud = false;
           if (m.data && m.data.token) { try { localStorage.setItem('tvdash.token', m.data.token); } catch (e) { /* negeren */ } }
           var q = wsQueue; wsQueue = [];
           for (var i = 0; i < q.length; i++) q[i](sock);
         } else if (m.event === 'ms.channel.unauthorized') {
           toast('Kies "Toestaan" in de pop-up op de TV');
+        } else if (wsListeners[m.event]) {
+          wsListeners[m.event](m);
         }
       };
       sock.onclose = sock.onerror = function () {
@@ -417,9 +419,12 @@
   function launchApp(a) {
     toast(a.name + ' starten…');
     var viaRemote = function () {
+      var type = 2;
+      for (var i = 0; installed && i < installed.length; i++) if (installed[i].id === a.id && installed[i].type) type = installed[i].type;
       remote(function (s) {
         s.send(JSON.stringify({ method: 'ms.channel.emit',
-          params: { event: 'ed.apps.launch', to: 'host', data: { appId: a.id, action_type: 'DEEP_LINK' } } }));
+          params: { event: 'ed.apps.launch', to: 'host',
+            data: { appId: a.id, action_type: type === 4 ? 'NATIVE_LAUNCH' : 'DEEP_LINK' } } }));
       });
     };
     try {
@@ -457,7 +462,12 @@
     } });
 
     sec('Apps');
-    info('OK zet een app aan of uit, ◀ ▶ verplaatst hem in de rij.');
+    info((installed ? '<b>' + installed.length + ' apps</b> gevonden op deze TV. '
+      : 'Geïnstalleerde apps nog niet opgehaald; alle apps worden getoond. ') +
+      'OK zet een app aan of uit, ◀ ▶ verplaatst hem in de rij.');
+    items.push({ type: 'action', label: 'Apps op deze TV opnieuw zoeken', run: function () {
+      toast('Apps zoeken…'); scanApps();
+    } });
     var keys = S.apps.slice(), k, i;
     for (k = 0; k < CATALOG.appOrder.length; k++) if (keys.indexOf(CATALOG.appOrder[k]) < 0) keys.push(CATALOG.appOrder[k]);
     if (installed) {
@@ -643,5 +653,6 @@
   scheduleShootingStar();
   tick();
   loadWeather();
-  scanApps(buildMain);
+  buildMain();
+  scanApps();
 })();
