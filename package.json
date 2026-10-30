@@ -1,0 +1,12 @@
+{
+  "name": "tv-dashboard",
+  "appName": "TV Dashboard",
+  "version": "2.0.0",
+  "description": "Strakke launcher met klok, weer, apps en HDMI-bronnen voor je Samsung TV",
+  "packageType": "app",
+  "appPath": "app/index.html",
+  "keys": [
+    "ColorF0Red",
+    "ColorF2Yellow"
+  ]
+}

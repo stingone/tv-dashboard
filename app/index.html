@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=1920, initial-scale=1">
+  <title>TV Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="stage">
+    <canvas id="sky" width="1920" height="1080"></canvas>
+    <div class="shooting" id="shooting"></div>
+    <div class="shade"></div>
+
+    <header class="top">
+      <div>
+        <div class="clock" id="clock">--:--</div>
+        <div class="date" id="date"></div>
+      </div>
+      <div class="topright">
+        <div class="weather" id="weather">
+          <div class="wicon" id="wIcon"></div>
+          <div>
+            <div class="wtemp" id="wTemp"></div>
+            <div class="wdesc" id="wDesc"></div>
+          </div>
+        </div>
+        <div class="gear" id="gear"></div>
+      </div>
+    </header>
+
+    <section class="row" id="appsRow">
+      <div class="label">Apps</div>
+      <div class="viewport"><div class="strip" id="apps"></div></div>
+    </section>
+
+    <section class="row" id="srcRow">
+      <div class="label">Bronnen</div>
+      <div class="viewport"><div class="strip" id="sources"></div></div>
+    </section>
+
+    <footer class="hints">
+      <span class="kbd">OK</span> Openen
+      <span class="kbd">▲</span> Instellingen
+    </footer>
+
+    <div class="overlay" id="overlay">
+      <div class="panel">
+        <div class="ptitle">Instellingen</div>
+        <div class="plist" id="plist"><div class="pinner" id="pinner"></div></div>
+        <div class="phints">
+          <span class="kbd">▲▼</span> Kiezen
+          <span class="kbd">◀▶</span> Wijzigen
+          <span class="kbd">OK</span> Aan/uit
+          <span class="kbd">Terug</span> Sluiten
+        </div>
+      </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="catalog.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
