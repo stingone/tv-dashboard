@@ -521,6 +521,7 @@
       'en open TizenBrew vóór je de TV uitzet.');
 
     sec('Overig');
+    items.push({ type: 'action', label: 'Terug naar TizenBrew', run: exitToTizenBrew });
     items.push({ type: 'action', label: resetArmed ? 'Nogmaals OK om te herstellen' : 'Standaardinstellingen herstellen',
       run: function () {
         if (!resetArmed) { resetArmed = true; return; }
@@ -592,6 +593,21 @@
     renderSettings();
   }
 
+  /* ---------- Terug naar TizenBrew ----------
+     TizenBrew opent de module in hetzelfde venster, dus terug in de geschiedenis
+     is het TizenBrew-menu. Bij autolaunch is er geen geschiedenis: dan de app sluiten. */
+  var backArmed = false;
+  function exitToTizenBrew() {
+    saveSettings();
+    if (history.length > 1) {
+      history.back();
+      setTimeout(closeApp, 1500);   // nog hier? dan was er niets om naar terug te gaan
+    } else closeApp();
+  }
+  function closeApp() {
+    try { tizen.application.getCurrentApplication().exit(); } catch (e) { /* niet op Tizen */ }
+  }
+
   /* ---------- Afstandsbediening ---------- */
   try {
     var extra = ['ColorF2Yellow', 'ColorF0Red'];
@@ -619,7 +635,13 @@
       case 13: activate(); return e.preventDefault();
       case 405: openSettings(); return e.preventDefault();          // geel
       case 403: loadWeather(); toast('Vernieuwen…'); return e.preventDefault(); // rood
-      case 10009: return e.preventDefault();                       // terug: launcher blijft staan
+      case 10009: case 27:                                         // terug: 2x snel = naar TizenBrew
+        if (backArmed) { exitToTizenBrew(); }
+        else {
+          backArmed = true; toast('Druk nogmaals op Terug om naar TizenBrew te gaan');
+          setTimeout(function () { backArmed = false; }, 2500);
+        }
+        return e.preventDefault();
       default: return;
     }
     if (focus.i < 0) focus.i = 0;
