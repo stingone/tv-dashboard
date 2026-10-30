@@ -7,11 +7,12 @@ Een strakke launcher voor je Samsung Tizen TV: klok, weer, je apps en je HDMI-br
 1. Maak op GitHub een **publieke** repo, bijv. `tv-dashboard`.
 2. Upload de inhoud van deze map (`package.json`, `README.md` en de map `app/`) via
    *Add file → Upload files*. `package.json` moet in de root staan.
-3. Op de TV: **TizenBrew → Module Manager → Add module** en vul in:
+3. Op de TV: **TizenBrew → Module Manager → Add GitHub module** en vul in (zonder `gh/`, dat zet TizenBrew er zelf voor):
    ```
-   gh/<jouw-github-naam>/tv-dashboard
+   stingone/tv-dashboard
    ```
-4. Start **TV Dashboard** vanuit TizenBrew.
+4. Ga terug naar het **TizenBrew-startscherm** en start daar **TV Dashboard**.
+   (In de Module Manager betekent OK op een module: verwijderen.)
 
 ## Automatisch starten bij het aanzetten van de TV
 
