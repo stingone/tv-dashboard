@@ -7,6 +7,7 @@ var DEFAULTS = {
   location: null,             // { name, lat, lon } of null = automatisch via IP
   apps: ['youtube', 'spotify', 'netflix', 'prime', 'disney', 'npo'],
   hdmi: { 1: 'generic', 2: 'generic', 3: 'generic', 4: 'generic' },
+  youtubeVia: 'tizentube',   // 'tizentube' (TizenBrew-module) of 'app'
   tvTile: true                // tegel voor antenne/kabel-TV
 };
 var FALLBACK_LOCATION = { name: 'Amsterdam', lat: 52.37, lon: 4.89 };

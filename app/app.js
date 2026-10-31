@@ -280,7 +280,57 @@
     }
     var a = CATALOG.apps[key];
     if (!a) return null;
+    if (key === 'youtube' && S.youtubeVia === 'tizentube') {
+      var tt = findTizenTube();
+      if (tt) return { key: key, id: 'tb:' + tt.fullName, tb: tt, name: a.name, bg: a.bg, logo: a.logo };
+    }
     return { key: key, id: resolveApp(key), name: a.name, bg: a.bg, logo: a.logo };
+  }
+
+  /* ---------- TizenBrew-modules (bijv. TizenTube) ----------
+     Het dashboard draait in het TizenBrew-venster, dus we kunnen de
+     TizenBrew-service (ws://127.0.0.1:8081) vragen een module te starten,
+     precies zoals het TizenBrew-startscherm dat doet. */
+  var TB = { GetModules: 4, LaunchModule: 5 };
+  var tbModules = null;
+
+  function loadTbModules() {
+    if (location.hostname !== '127.0.0.1') return;
+    var s;
+    try { s = new WebSocket('ws://127.0.0.1:8081'); } catch (e) { return; }
+    var ask = function () { s.send(JSON.stringify({ type: TB.GetModules, payload: false })); };
+    s.onopen = ask;
+    s.onmessage = function (ev) {
+      var m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+      if (m.type !== TB.GetModules) return;
+      if (!m.payload) return setTimeout(ask, 500);   // service nog bezig met laden
+      tbModules = m.payload;
+      s.close();
+      buildMain();
+      if (settingsOpen) renderSettings();
+    };
+  }
+
+  function findTizenTube() {
+    for (var i = 0; tbModules && i < tbModules.length; i++) {
+      if (/tizentube/i.test(tbModules[i].fullName || '') || /tizentube/i.test(tbModules[i].appName || '')) return tbModules[i];
+    }
+    return null;
+  }
+
+  function launchTbModule(mod) {
+    toast(mod.appName + ' starten…');
+    try {
+      for (var k = 0; k < (mod.keys || []).length; k++) tizen.tvinputdevice.registerKey(mod.keys[k]);
+    } catch (e) { /* al geregistreerd */ }
+    var s;
+    try { s = new WebSocket('ws://127.0.0.1:8081'); } catch (e) { return toast('TizenBrew niet bereikbaar'); }
+    s.onopen = function () {
+      s.send(JSON.stringify({ type: TB.LaunchModule, payload: mod }));
+      saveSettings();
+      if (!mod.evaluateScriptOnDocumentStart) setTimeout(function () { location.href = mod.appPath; }, 150);
+    };
+    s.onerror = function () { toast('TizenBrew niet bereikbaar'); };
   }
 
   /* ---------- Hoofdscherm ---------- */
@@ -417,6 +467,7 @@
   }
 
   function launchApp(a) {
+    if (a.tb) return launchTbModule(a.tb);
     toast(a.name + ' starten…');
     var viaRemote = function () {
       var type = 2;
@@ -462,6 +513,11 @@
     } });
 
     sec('Apps');
+    var tt = findTizenTube();
+    items.push({ type: 'cycle', label: 'YouTube openen met',
+      sub: tbModules && !tt ? 'TizenTube niet gevonden in TizenBrew' : '',
+      value: S.youtubeVia === 'tizentube' ? 'TizenTube' : 'YouTube-app',
+      change: function () { S.youtubeVia = S.youtubeVia === 'tizentube' ? 'app' : 'tizentube'; } });
     info((installed ? '<b>' + installed.length + ' apps</b> gevonden op deze TV. '
       : 'Geïnstalleerde apps nog niet opgehaald; alle apps worden getoond. ') +
       'OK zet een app aan of uit, ◀ ▶ verplaatst hem in de rij.');
@@ -677,4 +733,5 @@
   loadWeather();
   buildMain();
   scanApps();
+  loadTbModules();
 })();
